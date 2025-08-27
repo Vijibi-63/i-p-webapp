@@ -17,8 +17,17 @@ export const StorageService = {
     const indexStore = getIndexStore();
     const now = new Date().toISOString();
     let index = (await indexStore.getItem<BaseDoc[]>(INDEX_KEY)) || [];
-    // Remove any doc with same number (prevent duplicates)
-    index = index.filter(d => !(d.type === doc.type && d.number === doc.number && d.id !== doc.id));
+    // Find and remove any existing docs with the same type+number but different id
+    const duplicates = index.filter(d => d.type === doc.type && d.number === doc.number && d.id !== doc.id);
+    if (duplicates.length) {
+      for (const dup of duplicates) {
+        // Remove the old doc from its store to ensure only one file per number
+        const dupStore = getStore(dup.type);
+        await dupStore.removeItem(dup.id);
+      }
+      // Remove duplicates from index
+      index = index.filter(d => !(d.type === doc.type && d.number === doc.number && d.id !== doc.id));
+    }
     await store.setItem(doc.id, { ...doc, updatedAtISO: now });
     index = index.filter(d => d.id !== doc.id);
     index.push({ ...doc, updatedAtISO: now });
@@ -78,17 +87,26 @@ export const StorageService = {
     const indexStore = getIndexStore();
     let index = (await indexStore.getItem<BaseDoc[]>(INDEX_KEY)) || [];
     index = index.filter(d => d.type === type);
-    // Find max number for year
+    // Find max number for current year across both index and underlying store
     const year = new Date().getFullYear() % 100;
     const prefix = type === 'invoice' ? `I${year}` : `P${year}`;
     let maxNum = 0;
-    for (const doc of index) {
-  const match = doc.number.match(new RegExp(`^${prefix}(\d{3})$`));
+    const collect = (numStr?: string) => {
+      if (!numStr) return;
+      const match = numStr.match(new RegExp(`^${prefix}(\\d+)$`));
       if (match) {
         const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
+        if (!Number.isNaN(num) && num > maxNum) maxNum = num;
       }
-    }
+    };
+    for (const doc of index) collect(doc.number);
+    // Also scan the underlying store for this type to be robust
+    const store = getStore(type);
+    try {
+      await store.iterate<BaseDoc, void>((value) => {
+        collect(value?.number);
+      });
+    } catch {}
     const nextNum = String(maxNum + 1).padStart(3, '0');
     return `${prefix}${nextNum}`;
   },

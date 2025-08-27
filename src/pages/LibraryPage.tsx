@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { storageService } from '../services/storageServiceImpl';
+import { StorageService } from '../storage';
 import type { DocType, BaseDoc } from '../types';
 
 const TABS: Array<{ label: string; value?: DocType | 'all' }> = [
@@ -18,7 +18,7 @@ const LibraryPage: React.FC = () => {
 
   const refresh = async () => {
     setLoading(true);
-    let list = await storageService.list(tab === 'all' ? undefined : tab);
+    let list = await StorageService.list(tab === 'all' ? undefined : tab);
     if (search) {
       const s = search.toLowerCase();
       list = list.filter(doc =>
@@ -41,12 +41,22 @@ const LibraryPage: React.FC = () => {
     navigate(`/edit/${doc.type}/${doc.id}`);
   };
   const handleDuplicate = async (doc: BaseDoc) => {
-    await storageService.duplicate(doc.id);
-    refresh();
+    try {
+      await StorageService.duplicate(doc.id);
+      await refresh();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to duplicate document.');
+    }
   };
   const handleDelete = async (doc: BaseDoc) => {
-    await storageService.remove(doc.id);
-    refresh();
+    try {
+      await StorageService.remove(doc.id);
+      await refresh();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete document.');
+    }
   };
 
   return (
@@ -79,29 +89,32 @@ const LibraryPage: React.FC = () => {
         <table className="doc-list" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
+              <th>Name</th>
               <th>Type</th>
               <th>Number</th>
-              <th>Date</th>
               <th>Total</th>
               <th>Last Updated</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {docs.map(doc => (
-              <tr key={doc.id}>
-                <td>{doc.type}</td>
-                <td>{doc.number}</td>
-                <td>{doc.dateISO.slice(0, 10)}</td>
-                <td>{doc.total.toFixed(2)}</td>
-                <td>{doc.updatedAtISO.slice(0, 16).replace('T', ' ')}</td>
-                <td>
-                  <button onClick={() => handleOpen(doc)}>Open</button>
-                  <button onClick={() => handleDuplicate(doc)}>Duplicate</button>
-                  <button onClick={() => handleDelete(doc)}>Delete</button>
-                </td>
-              </tr>
-            ))}
+            {docs.map(doc => {
+              const firstBillToLine = (doc.billTo || '').split('\n')[0] || '';
+              const name = `${doc.number}${firstBillToLine ? ' - ' + firstBillToLine : ''}`;
+              return (
+                <tr key={doc.id}>
+                  <td>{name}</td>
+                  <td>{doc.type}</td>
+                  <td>{doc.number}</td>
+                  <td>{doc.total.toFixed(2)}</td>
+                  <td>{doc.updatedAtISO.slice(0, 16).replace('T', ' ')}</td>
+                  <td>
+                    <button onClick={() => handleOpen(doc)}>Open</button>
+                    <button onClick={() => handleDelete(doc)}>Delete</button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

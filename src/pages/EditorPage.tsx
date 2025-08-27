@@ -122,7 +122,7 @@ const EditorPage: React.FC = () => {
           {saving === 'saving' ? 'Saving...' : saving === 'saved' ? 'Saved' : ''}
         </span>
       </div>
-  <div className="doc-canvas" style={{ width: 800, maxWidth: '100%', margin: '0 auto', background: '#fff', padding: 24, boxShadow: '0 0 8px #ccc' }}>
+  <div className="doc-canvas" style={{ width: 800, maxWidth: '100%', margin: '0 auto', background: '#fff', padding: 24, boxShadow: '0 0 8px #ccc', textAlign: 'left' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <img src={logo} alt="Logo" style={{ width: 280, height: 180, borderRadius: 8, marginBottom: 8 }} />
@@ -190,7 +190,15 @@ const EditorPage: React.FC = () => {
           Total: ${doc.total.toFixed(2)}
         </div>
         <div style={{ margin: '16px 0' }}>
-          <label><br /><textarea value={doc.endnote || ''} onChange={e => handleChange('endnote', e.target.value)} rows={2} /></label>
+          <label>
+            <br />
+            <textarea
+              value={doc.endnote || ''}
+              onChange={e => handleChange('endnote', e.target.value)}
+              rows={3}
+              style={{ textAlign: 'center' }}
+            />
+          </label>
         </div>
       </div>
       <style>{`
@@ -198,10 +206,13 @@ const EditorPage: React.FC = () => {
           body * { visibility: hidden !important; }
           .doc-canvas, .doc-canvas * { visibility: visible !important; }
           .no-print, .add-line-btn, button { display: none !important; }
-          .doc-canvas { box-shadow: none !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+          .doc-canvas { box-shadow: none !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; margin: 0 !important; padding: 0 24px !important; background: #fff !important; }
           .doc-table th, .doc-table td { border: 1px solid #b3b3b3 !important; padding: 8px !important; }
           .doc-table td { white-space: pre-wrap !important; word-break: break-word !important; }
           input, textarea { border: none !important; box-shadow: none !important; background: transparent !important; color: #222 !important; }
+          .doc-table { table-layout: fixed !important; width: 100% !important; }
+          .doc-table th:nth-child(1), .doc-table td:nth-child(1) { width: 80% !important; }
+          .doc-table th:nth-child(2), .doc-table td:nth-child(2) { width: 20% !important; }
         }
         .billfor-label { display: block; font-weight: 500; margin-bottom: 2px; text-align: left; }
         .billfor-box { margin-bottom: 0; }
