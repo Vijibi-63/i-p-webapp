@@ -1,0 +1,9 @@
+@media print {
+  body * { visibility: hidden !important; }
+  .doc-canvas, .doc-canvas * { visibility: visible !important; }
+  .no-print, .toolbar, button, nav, header, footer { display: none !important; }
+  .doc-canvas { box-shadow: none !important; }
+  @page { size: A4; margin: 12mm; }
+  table { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; }
+}
