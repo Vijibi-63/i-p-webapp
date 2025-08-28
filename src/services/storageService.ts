@@ -1,4 +1,4 @@
-import { DocType, BaseDoc, InvoiceDoc, ProposalDoc, LineItem } from '../types';
+import type { DocType, BaseDoc } from '../types';
 
 export interface StorageService {
   list(type?: DocType, tag?: string): Promise<BaseDoc[]>;

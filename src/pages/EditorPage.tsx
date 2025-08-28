@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import logo from '../assets/logo.png';
+import logo from '../assets/logo.svg';
 import { useNavigate, useParams } from 'react-router-dom';
 import { StorageService } from '../storage';
 import type { DocType, BaseDoc, ProposalDoc } from '../types';
@@ -10,8 +10,9 @@ const DEFAULT_ENDNOTE = {
 };
 
 const DEFAULT_DISCLAIMER = {
-    proposal: 'Overlook Mechanical Services:\nProposes the following scope of work to be done, and to include the cost of permits and inspections.\nThis quote does not include any fixtures.'
-}
+  proposal:
+    'Overlook Mechanical Services:\nProposes the following scope of work to be done, and to include the cost of permits and inspections.\nThis quote does not include any fixtures.',
+};
 
 async function getInitialDoc(type: DocType): Promise<BaseDoc | ProposalDoc> {
   const now = new Date();
@@ -31,7 +32,7 @@ async function getInitialDoc(type: DocType): Promise<BaseDoc | ProposalDoc> {
     version: 1,
   };
   if (type === 'proposal') {
-    return { ...base, disclaimer: '' };
+    return { ...base, disclaimer: DEFAULT_DISCLAIMER.proposal };
   }
   return base;
 }
@@ -99,10 +100,7 @@ const EditorPage: React.FC = () => {
     setSaving('saved');
     setTimeout(() => setSaving('idle'), 1200);
   };
-  const handleDuplicate = async () => {
-  const newDoc = await StorageService.duplicate(doc.id);
-    navigate(`/edit/${newDoc.type}/${newDoc.id}`);
-  };
+  // duplicate action removed; keep codebase clean
   const handlePrint = () => {
     setIsPrint(true);
     setTimeout(() => {

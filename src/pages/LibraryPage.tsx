@@ -40,15 +40,7 @@ const LibraryPage: React.FC = () => {
   const handleOpen = (doc: BaseDoc) => {
     navigate(`/edit/${doc.type}/${doc.id}`);
   };
-  const handleDuplicate = async (doc: BaseDoc) => {
-    try {
-      await StorageService.duplicate(doc.id);
-      await refresh();
-    } catch (e) {
-      console.error(e);
-      alert('Failed to duplicate document.');
-    }
-  };
+  // duplicate action removed from UI
   const handleDelete = async (doc: BaseDoc) => {
     try {
       await StorageService.remove(doc.id);
