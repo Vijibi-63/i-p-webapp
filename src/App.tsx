@@ -7,7 +7,7 @@ import EditorPage from './pages/EditorPage';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/library" element={<LibraryPage />} />
