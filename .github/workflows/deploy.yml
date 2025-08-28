@@ -24,15 +24,24 @@ jobs:
           VITE_BASE: ${{ secrets.VITE_BASE }}
         run: npm run build
 
-      - name: Deploy dist over SFTP (SSH key auth)
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      - name: Ensure remote directory exists
+        uses: appleboy/ssh-action@v1.1.0
         with:
-          server: ${{ secrets.SFTP_HOST }}
-          port: ${{ secrets.SFTP_PORT }}
+          host: ${{ secrets.SFTP_HOST }}
           username: ${{ secrets.SFTP_USERNAME }}
-          ssh_private_key: ${{ secrets.SFTP_PRIVATE_KEY }}
-          # Uncomment if your private key has a passphrase
-          # passphrase: ${{ secrets.SFTP_PASSPHRASE }}
-          local_path: dist/*
-          remote_path: ${{ secrets.SFTP_REMOTE_DIR }}
-          delete_remote_files: false
+          key: ${{ secrets.SFTP_PRIVATE_KEY }}
+          port: ${{ secrets.SFTP_PORT }}
+          passphrase: ${{ secrets.SFTP_PASSPHRASE }}
+          script: |
+            mkdir -p "${{ secrets.SFTP_REMOTE_DIR }}"
+
+      - name: Upload dist via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          key: ${{ secrets.SFTP_PRIVATE_KEY }}
+          port: ${{ secrets.SFTP_PORT }}
+          passphrase: ${{ secrets.SFTP_PASSPHRASE }}
+          source: "dist/*"
+          target: ${{ secrets.SFTP_REMOTE_DIR }}
