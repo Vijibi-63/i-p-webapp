@@ -134,11 +134,23 @@ const EditorPage: React.FC = () => {
         <div style={{ display: 'flex', gap: 16 }}>
           <div style={{ flex: 1 }} className="billfor-box">
             <span className="billfor-label">Bill To</span>
-            <textarea value={doc.billTo} onChange={e => handleChange('billTo', e.target.value)} rows={3} />
+            {isPrint ? (
+              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: 48 }}>
+                {doc.billTo}
+              </div>
+            ) : (
+              <textarea value={doc.billTo} onChange={e => handleChange('billTo', e.target.value)} rows={3} />
+            )}
           </div>
           <div style={{ flex: 1 }} className="billfor-box">
             <span className="billfor-label">For</span>
-            <textarea value={doc.forWhat} onChange={e => handleChange('forWhat', e.target.value)} rows={3} />
+            {isPrint ? (
+              <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: 48 }}>
+                {doc.forWhat}
+              </div>
+            ) : (
+              <textarea value={doc.forWhat} onChange={e => handleChange('forWhat', e.target.value)} rows={3} />
+            )}
           </div>
         </div>
         {doc.type === 'proposal' && (
