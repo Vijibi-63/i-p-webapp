@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import logo from '../assets/logo.svg';
+import logo from '../assets/logo.png';
 import { useNavigate, useParams } from 'react-router-dom';
 import { StorageService } from '../storage';
 import type { DocType, BaseDoc, ProposalDoc } from '../types';
@@ -143,7 +143,21 @@ const EditorPage: React.FC = () => {
         </div>
         {doc.type === 'proposal' && (
           <div style={{ margin: '16px 0' }}>
-            <label>Disclaimer<br /><textarea value={(doc as ProposalDoc).disclaimer} onChange={e => handleChange('disclaimer', e.target.value)} rows={2} /></label>
+            <label>
+              Disclaimer
+              <br />
+              {isPrint ? (
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {(doc as ProposalDoc).disclaimer}
+                </div>
+              ) : (
+                <textarea
+                  value={(doc as ProposalDoc).disclaimer}
+                  onChange={e => handleChange('disclaimer', e.target.value)}
+                  rows={4}
+                />
+              )}
+            </label>
           </div>
         )}
         <table className="doc-table" style={{ width: '100%', margin: '16px 0', borderCollapse: 'collapse', border: '1px solid #b3b3b3' }}>
@@ -190,12 +204,18 @@ const EditorPage: React.FC = () => {
         <div style={{ margin: '16px 0' }}>
           <label>
             <br />
-            <textarea
-              value={doc.endnote || ''}
-              onChange={e => handleChange('endnote', e.target.value)}
-              rows={3}
-              style={{ textAlign: 'center' }}
-            />
+            {isPrint ? (
+              <div style={{ textAlign: 'center', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {doc.endnote || ''}
+              </div>
+            ) : (
+              <textarea
+                value={doc.endnote || ''}
+                onChange={e => handleChange('endnote', e.target.value)}
+                rows={3}
+                style={{ textAlign: 'center' }}
+              />
+            )}
           </label>
         </div>
       </div>
@@ -204,13 +224,25 @@ const EditorPage: React.FC = () => {
           body * { visibility: hidden !important; }
           .doc-canvas, .doc-canvas * { visibility: visible !important; }
           .no-print, .add-line-btn, button { display: none !important; }
-          .doc-canvas { box-shadow: none !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; margin: 0 !important; padding: 0 24px !important; background: #fff !important; }
+          /* Fit to A4 with safe margins */
+          @page { size: A4 portrait; margin: 12mm; }
+          .doc-canvas {
+            box-shadow: none !important;
+            position: static !important;
+            width: 190mm !important; /* 210mm - margins */
+            margin: 0 auto !important;
+            padding: 0 !important;
+            background: #fff !important;
+            overflow: visible !important;
+          }
           .doc-table th, .doc-table td { border: 1px solid #b3b3b3 !important; padding: 8px !important; }
           .doc-table td { white-space: pre-wrap !important; word-break: break-word !important; }
           input, textarea { border: none !important; box-shadow: none !important; background: transparent !important; color: #222 !important; }
           .doc-table { table-layout: fixed !important; width: 100% !important; }
           .doc-table th:nth-child(1), .doc-table td:nth-child(1) { width: 80% !important; }
           .doc-table th:nth-child(2), .doc-table td:nth-child(2) { width: 20% !important; }
+          /* Avoid browser appending link URLs */
+          a[href]:after { content: '' !important; }
         }
         .billfor-label { display: block; font-weight: 500; margin-bottom: 2px; text-align: left; }
         .billfor-box { margin-bottom: 0; }
