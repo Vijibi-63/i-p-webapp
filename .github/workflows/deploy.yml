@@ -24,14 +24,15 @@ jobs:
           VITE_BASE: ${{ secrets.VITE_BASE }}
         run: npm run build
 
-      - name: Deploy dist over SFTP
+      - name: Deploy dist over SFTP (SSH key auth)
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           server: ${{ secrets.SFTP_HOST }}
           port: ${{ secrets.SFTP_PORT }}
           username: ${{ secrets.SFTP_USERNAME }}
-          password: ${{ secrets.SFTP_PASSWORD }}
-          ssh_private_key: ""
+          ssh_private_key: ${{ secrets.SFTP_PRIVATE_KEY }}
+          # Uncomment if your private key has a passphrase
+          # passphrase: ${{ secrets.SFTP_PASSPHRASE }}
           local_path: dist/*
           remote_path: ${{ secrets.SFTP_REMOTE_DIR }}
           delete_remote_files: false
