@@ -24,6 +24,13 @@ jobs:
           VITE_BASE: ${{ secrets.VITE_BASE }}
         run: npm run build
 
+      - name: List local build artifacts
+        run: |
+          echo "Listing local dist contents:"
+          ls -la dist || true
+          echo "Disk usage for dist:"
+          du -h -d 2 dist || true
+
       - name: Ensure remote directory exists
         uses: appleboy/ssh-action@v1.1.0
         with:
@@ -35,7 +42,7 @@ jobs:
           script: |
             mkdir -p "${{ secrets.SFTP_REMOTE_DIR }}"
 
-      - name: Upload dist via SCP
+      - name: Upload dist via SCP (recursive)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SFTP_HOST }}
@@ -43,5 +50,18 @@ jobs:
           key: ${{ secrets.SFTP_PRIVATE_KEY }}
           port: ${{ secrets.SFTP_PORT }}
           passphrase: ${{ secrets.SFTP_PASSPHRASE }}
-          source: "dist/*"
-          target: ${{ secrets.SFTP_REMOTE_DIR }}
+          source: "dist/**"
+          target: ${{ secrets.SFTP_REMOTE_DIR }}/
+          overwrite: true
+
+      - name: Verify remote directory contents
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USERNAME }}
+          key: ${{ secrets.SFTP_PRIVATE_KEY }}
+          port: ${{ secrets.SFTP_PORT }}
+          passphrase: ${{ secrets.SFTP_PASSPHRASE }}
+          script: |
+            echo "Listing remote directory: ${{ secrets.SFTP_REMOTE_DIR }}"
+            ls -la "${{ secrets.SFTP_REMOTE_DIR }}" || true
