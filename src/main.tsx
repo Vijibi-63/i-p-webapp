@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import favicon from './assets/logo.png'
+import favicon from './assets/icon.png'
 
 // Ensure favicon works in production (Vite processes imported assets)
 function setFavicon(href: string) {
