@@ -45,6 +45,10 @@ export const StorageService = {
     const indexStore = getIndexStore();
     let index = (await indexStore.getItem<BaseDoc[]>(INDEX_KEY)) || [];
     if (type) index = index.filter(d => d.type === type);
+    const extractNum = (n: string) => {
+      const match = n.match(/(\d+)(?!.*\d)/);
+      return match ? parseInt(match[1], 10) : Number.NEGATIVE_INFINITY;
+    };
     // Remove duplicates by number, keep latest
     const unique: Record<string, BaseDoc> = {};
     for (const doc of index) {
@@ -60,7 +64,12 @@ export const StorageService = {
         (doc.tags?.some(t => t.toLowerCase().includes(s)))
       );
     }
-    return index.sort((a, b) => b.updatedAtISO.localeCompare(a.updatedAtISO));
+    return index.sort((a, b) => {
+      const numA = extractNum(a.number);
+      const numB = extractNum(b.number);
+      if (numA !== numB) return numB - numA;
+      return b.number.localeCompare(a.number);
+    });
   },
   async remove(id: string): Promise<void> {
     for (const t of ['invoice', 'proposal'] as DocType[]) {

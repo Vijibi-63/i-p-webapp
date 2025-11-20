@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import logo from '../assets/logo.png';
 import { useNavigate, useParams } from 'react-router-dom';
 import { StorageService } from '../storage';
-import type { DocType, BaseDoc, ProposalDoc } from '../types';
+import type { DocType, BaseDoc, ProposalDoc, TableBlock } from '../types';
 
 const DEFAULT_ENDNOTE = {
   invoice: 'Make all checks payable to Overlook Mechanical Services. \nTotal due in 15 days. Overdue accounts subject to a service charge of 1% per month. \n Thank you for your business!',
@@ -43,6 +43,7 @@ const EditorPage: React.FC = () => {
   const [doc, setDoc] = useState<BaseDoc | ProposalDoc | null>(null);
   const [isPrint, setIsPrint] = useState(false);
   const [saving, setSaving] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [editingCostKey, setEditingCostKey] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load doc on mount
@@ -50,51 +51,122 @@ const EditorPage: React.FC = () => {
     async function load() {
       if (id) {
         const loaded = await StorageService.get(id);
-        if (loaded) setDoc(loaded);
+        if (loaded) setDoc(ensureTables(loaded as BaseDoc | ProposalDoc));
       } else if (type === 'invoice' || type === 'proposal') {
         const initialDoc = await getInitialDoc(type as DocType);
-        setDoc(initialDoc);
+        setDoc(ensureTables(initialDoc));
       }
     }
     load();
   }, [id, type]);
 
-  // Auto-calc total
+  const ensureTables = (incoming: BaseDoc | ProposalDoc) => {
+    const tables: TableBlock[] =
+      incoming.tables && incoming.tables.length
+        ? incoming.tables.map(t => ({
+          ...t,
+          id: t.id || crypto.randomUUID(),
+          items: t.items?.length ? t.items : [{ id: crypto.randomUUID(), description: '', cost: 0 }],
+          total: t.total ?? 0,
+        }))
+        : [
+          {
+            id: crypto.randomUUID(),
+            title: '',
+            items: incoming.items?.length ? incoming.items : [{ id: crypto.randomUUID(), description: '', cost: 0 }],
+            total: incoming.total ?? 0,
+          },
+        ];
+    return { ...incoming, tables };
+  };
+
+  // Auto-calc total per table + doc aggregate
   useEffect(() => {
-    if (!doc) return;
-    const total = doc.items.reduce((sum, item) => sum + (item.description ? item.cost : 0), 0);
-    if (doc.total !== total) setDoc({ ...doc, total });
-  }, [doc?.items]);
+    if (!doc || !doc.tables) return;
+    let changed = false;
+    const tables = doc.tables.map((t) => {
+      const tableTotal = t.items.reduce((sum, item) => sum + (item.description ? item.cost : 0), 0);
+      if (tableTotal !== t.total) changed = true;
+      return tableTotal === t.total ? t : { ...t, total: tableTotal };
+    });
+    const aggregateTotal = tables.reduce((sum, t) => sum + t.total, 0);
+    if (changed || aggregateTotal !== doc.total || doc.items !== tables[0]?.items) {
+      setDoc(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          tables,
+          items: tables[0]?.items ?? prev.items,
+          total: aggregateTotal,
+        };
+      });
+    }
+  }, [doc?.tables]);
 
   // Auto-save debounce
   useEffect(() => {
     if (!doc) return;
+    const currentDoc = doc;
     setSaving('saving');
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
-  await StorageService.save({ ...doc, updatedAtISO: new Date().toISOString() });
+  await StorageService.save({ ...currentDoc, updatedAtISO: new Date().toISOString() });
       setSaving('saved');
       setTimeout(() => setSaving('idle'), 1200);
     }, 700);
     // eslint-disable-next-line
   }, [doc]);
 
-  if (!doc) return <div>Loading...</div>;
-
   const handleChange = (field: string, value: any) => {
-    setDoc({ ...doc, [field]: value });
+    setDoc(prev => (prev ? { ...prev, [field]: value } : prev));
   };
-  const handleItemChange = (idx: number, field: string, value: any) => {
-    const items = doc.items.map((item, i) => i === idx ? { ...item, [field]: value } : item);
-    setDoc({ ...doc, items });
+  const formatMoney = (value: number) =>
+    value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const autoResize = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
   };
-  const handleAddItem = () => {
-    setDoc({ ...doc, items: [...doc.items, { id: crypto.randomUUID(), description: '', cost: 0 }] });
+  const handleItemChange = (tableIdx: number, idx: number, field: string, value: any) => {
+    setDoc(prev => {
+      if (!prev || !prev.tables) return prev;
+      const tables = prev.tables.map((table, tIndex) => {
+        if (tIndex !== tableIdx) return table;
+        const items = table.items.map((item, i) => i === idx ? { ...item, [field]: value } : item);
+        return { ...table, items };
+      });
+      return { ...prev, tables };
+    });
   };
-  const handleRemoveItem = (idx: number) => {
-    setDoc({ ...doc, items: doc.items.filter((_, i) => i !== idx) });
+  const handleDescriptionChangeTable = (tableIdx: number, idx: number) => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    autoResize(e.target);
+    handleItemChange(tableIdx, idx, 'description', e.target.value);
+  };
+  const handleAddItemToTable = (tableIdx: number) => {
+    setDoc(prev => {
+      if (!prev || !prev.tables) return prev;
+      const tables = prev.tables.map((table, tIndex) => {
+        if (tIndex !== tableIdx) return table;
+        return {
+          ...table,
+          items: [...table.items, { id: crypto.randomUUID(), description: '', cost: 0 }],
+        };
+      });
+      return { ...prev, tables };
+    });
+  };
+  const handleRemoveItemFromTable = (tableIdx: number, idx: number) => {
+    setDoc(prev => {
+      if (!prev || !prev.tables) return prev;
+      const tables = prev.tables.map((table, tIndex) => {
+        if (tIndex !== tableIdx) return table;
+        return { ...table, items: table.items.filter((_, i) => i !== idx) };
+      });
+      return { ...prev, tables };
+    });
   };
   const handleSave = async () => {
+    if (!doc) return;
     setSaving('saving');
   await StorageService.save({ ...doc, updatedAtISO: new Date().toISOString() });
     setSaving('saved');
@@ -108,6 +180,74 @@ const EditorPage: React.FC = () => {
       setIsPrint(false);
     }, 100);
   };
+
+  useEffect(() => {
+    if (isPrint) return;
+    const timer = requestAnimationFrame(() => {
+      document
+        .querySelectorAll<HTMLTextAreaElement>('.description-textarea')
+        .forEach(autoResize);
+    });
+    return () => cancelAnimationFrame(timer);
+  }, [doc?.tables, isPrint]);
+
+  const handleCostChange = (tableIdx: number, idx: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/,/g, '').trim();
+    const num = raw === '' ? 0 : Number(raw);
+    if (Number.isNaN(num)) return; // ignore invalid
+    handleItemChange(tableIdx, idx, 'cost', Number.isFinite(num) ? num : 0);
+  };
+  const costDisplay = (tableIdx: number, item: { cost: number }, idx: number) => {
+    const isEditing = editingCostKey === `${tableIdx}-${idx}`;
+    if (isEditing) return item.cost === 0 ? '' : String(item.cost);
+    return item.cost === 0 ? '' : formatMoney(item.cost);
+  };
+
+  const addTable = () => {
+    setDoc(prev => {
+      if (!prev || !prev.tables) return prev;
+      const newTable: TableBlock = {
+        id: crypto.randomUUID(),
+        title: '',
+        items: [{ id: crypto.randomUUID(), description: '', cost: 0 }],
+        total: 0,
+      };
+      return { ...prev, tables: [...prev.tables, newTable] };
+    });
+  };
+
+  const removeTable = (tableIdx: number) => {
+    setDoc(prev => {
+      if (!prev || !prev.tables || prev.tables.length <= 1) return prev;
+      const tables = prev.tables.filter((_, idx) => idx !== tableIdx);
+      return { ...prev, tables };
+    });
+  };
+
+  const moveTable = (tableIdx: number, direction: -1 | 1) => {
+    setDoc(prev => {
+      if (!prev || !prev.tables) return prev;
+      const target = tableIdx + direction;
+      if (target < 0 || target >= prev.tables.length) return prev;
+      const tables = [...prev.tables];
+      [tables[tableIdx], tables[target]] = [tables[target], tables[tableIdx]];
+      return { ...prev, tables };
+    });
+  };
+
+  const handleTableTitleChange = (tableIdx: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value.slice(0, 30);
+    setDoc(prev => {
+      if (!prev || !prev.tables) return prev;
+      const tables = prev.tables.map((t, idx) => (idx === tableIdx ? { ...t, title: next } : t));
+      return { ...prev, tables };
+    });
+  };
+
+  const displayTitle = (table: TableBlock, idx: number) => (table.title?.trim() ? table.title.trim() : `Option ${idx + 1}`);
+
+  if (!doc) return <div>Loading...</div>;
+  const tables = doc.tables ?? [];
 
   return (
     <div className="editor-container">
@@ -172,47 +312,101 @@ const EditorPage: React.FC = () => {
             </label>
           </div>
         )}
-        <table className="doc-table" style={{ width: '100%', margin: '16px 0', borderCollapse: 'collapse', border: '1px solid #b3b3b3' }}>
-          <thead>
-            <tr style={{ background: '#f7f7f7' }}>
-              <th style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'left' }}>Description</th>
-              <th style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'right' }}>Cost</th>
-              {!isPrint && <th style={{ border: '1px solid #b3b3b3', padding: '8px', width: 32 }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {doc.items.map((item, idx) => (
-              <tr key={item.id}>
-                <td style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'left' }}>
-                  {isPrint ? (
-                    <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: 32, textAlign: 'left' }}>{item.description}</div>
-                  ) : (
-                    <textarea value={item.description} onChange={e => handleItemChange(idx, 'description', e.target.value)} style={{ width: '100%', background: '#fff', color: '#222', resize: 'vertical', minHeight: 32, maxHeight: 120, overflowWrap: 'break-word', textAlign: 'left' }} rows={2} />
-                  )}
-                </td>
-                <td style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <span style={{ marginRight: 4 }}>$</span>
-                  {isPrint ? (
-                    <span>{Number(item.cost).toFixed(2)}</span>
-                  ) : (
-                    <input type="number" step="0.01" value={item.cost === 0 ? '' : item.cost} onChange={e => handleItemChange(idx, 'cost', e.target.value === '' ? 0 : parseFloat(e.target.value))} style={{ width: 80, background: '#fff', color: '#222', textAlign: 'right' }} />
-                  )}
-                </td>
-                {!isPrint && (
-                  <td style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'center', width: 32 }}>
-                    <button onClick={() => handleRemoveItem(idx)} disabled={doc.items.length === 1} style={{ color: 'red', fontWeight: 'bold', fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Remove">×</button>
-                  </td>
+        {tables.map((table, tIdx) => (
+          <div key={table.id} style={{ marginTop: tIdx === 0 ? 12 : 24, paddingTop: tIdx === 0 ? 0 : 12, borderTop: tIdx === 0 ? 'none' : '1px dashed #c7c7c7' }}>
+            {tables.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                {isPrint ? (
+                  <strong>{displayTitle(table, tIdx)}</strong>
+                ) : (
+                  <input
+                    type="text"
+                    value={displayTitle(table, tIdx)}
+                    onChange={handleTableTitleChange(tIdx)}
+                    maxLength={30}
+                    style={{
+                      width: `${Math.min(30, Math.max(8, displayTitle(table, tIdx).length + 1))}ch`,
+                      fontWeight: 700,
+                      border: '1px solid #b3b3b3',
+                      padding: '6px 10px',
+                    }}
+                    aria-label={`Table title ${tIdx + 1}`}
+                  />
                 )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                {!isPrint && (
+                  <>
+                    <button onClick={() => moveTable(tIdx, -1)} disabled={tIdx === 0}>Up</button>
+                    <button onClick={() => moveTable(tIdx, 1)} disabled={tIdx === tables.length - 1}>Down</button>
+                    <button onClick={() => removeTable(tIdx)} disabled={tables.length === 1}>Delete table</button>
+                  </>
+                )}
+              </div>
+            )}
+            <table className="doc-table" style={{ width: '100%', margin: '12px 0', borderCollapse: 'collapse', border: '1px solid #b3b3b3' }}>
+              <thead>
+                <tr style={{ background: '#f7f7f7' }}>
+                  <th style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'left' }}>Description</th>
+                  <th style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'right' }}>Cost</th>
+                  {!isPrint && <th style={{ border: '1px solid #b3b3b3', padding: '8px', width: 32 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {table.items.map((item, idx) => (
+                  <tr key={item.id}>
+                    <td style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'left' }}>
+                      {isPrint ? (
+                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', minHeight: 32, textAlign: 'left' }}>{item.description}</div>
+                      ) : (
+                        <textarea
+                          className="description-textarea"
+                          value={item.description}
+                          onChange={handleDescriptionChangeTable(tIdx, idx)}
+                          onInput={e => autoResize(e.currentTarget)}
+                          style={{ width: '100%', background: '#fff', color: '#222', resize: 'none', minHeight: 32, overflowWrap: 'break-word', textAlign: 'left', overflow: 'hidden' }}
+                          rows={2}
+                        />
+                      )}
+                    </td>
+                    <td style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <span style={{ marginRight: 4 }}>$</span>
+                      {isPrint ? (
+                        <span>{formatMoney(Number(item.cost))}</span>
+                      ) : (
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={costDisplay(tIdx, item, idx)}
+                          onFocus={() => setEditingCostKey(`${tIdx}-${idx}`)}
+                          onBlur={() => setEditingCostKey(null)}
+                          onChange={handleCostChange(tIdx, idx)}
+                          style={{ width: 110, background: '#fff', color: '#222', textAlign: 'right' }}
+                        />
+                      )}
+                    </td>
+                    {!isPrint && (
+                      <td style={{ border: '1px solid #b3b3b3', padding: '8px', textAlign: 'center', width: 32 }}>
+                        <button onClick={() => handleRemoveItemFromTable(tIdx, idx)} disabled={table.items.length === 1} style={{ color: 'red', fontWeight: 'bold', fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Remove">-</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {!isPrint && (
+                <button className="add-line-btn no-print" onClick={() => handleAddItemToTable(tIdx)}>Add Line Item</button>
+              )}
+              <div style={{ textAlign: 'right', fontSize: 16, fontWeight: 600 }}>
+                Table Total: ${formatMoney(table.total)}
+              </div>
+            </div>
+          </div>
+        ))}
         {!isPrint && (
-          <button className="add-line-btn no-print" onClick={handleAddItem}>Add Line Item</button>
+          <button className="add-line-btn no-print" onClick={addTable} style={{ marginTop: 16 }}>
+            Add New Table
+          </button>
         )}
-        <div style={{ textAlign: 'right', fontSize: 20, fontWeight: 600, margin: '16px 0' }}>
-          Total: ${doc.total.toFixed(2)}
-        </div>
         <div style={{ margin: '16px 0' }}>
           <label>
             <br />
@@ -237,7 +431,7 @@ const EditorPage: React.FC = () => {
           .doc-canvas, .doc-canvas * { visibility: visible !important; }
           .no-print, .add-line-btn, button { display: none !important; }
           /* Fit to A4 with safe margins */
-          @page { size: A4 portrait; margin: 12mm; }
+          @page { size: A4 portrait; margin: 16mm 12mm 16mm 12mm; }
           .doc-canvas {
             box-shadow: none !important;
             position: static !important;
@@ -249,6 +443,8 @@ const EditorPage: React.FC = () => {
           }
           .doc-table th, .doc-table td { border: 1px solid #b3b3b3 !important; padding: 8px !important; }
           .doc-table td { white-space: pre-wrap !important; word-break: break-word !important; }
+          .doc-table { margin: 4mm 0 !important; break-inside: auto !important; page-break-inside: auto !important; }
+          .doc-table tr { break-inside: avoid !important; page-break-inside: avoid !important; }
           input, textarea { border: none !important; box-shadow: none !important; background: transparent !important; color: #222 !important; }
           .doc-table { table-layout: fixed !important; width: 100% !important; }
           .doc-table th:nth-child(1), .doc-table td:nth-child(1) { width: 80% !important; }

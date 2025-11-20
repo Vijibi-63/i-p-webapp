@@ -14,8 +14,9 @@ export interface BaseDoc {
   logoDataUrl?: string;
   billTo: string;
   forWhat: string;
-  items: LineItem[];
-  total: number;
+  items: LineItem[]; // legacy: first table items, kept for compatibility
+  total: number; // legacy: aggregated total for list views
+  tables?: TableBlock[];
   endnote?: string;
   tags?: string[];
   updatedAtISO: string;
@@ -27,3 +28,10 @@ export interface ProposalDoc extends BaseDoc {
 }
 
 export interface InvoiceDoc extends BaseDoc {}
+
+export interface TableBlock {
+  id: string;
+  title?: string;
+  items: LineItem[];
+  total: number;
+}

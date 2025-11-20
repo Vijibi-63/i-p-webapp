@@ -16,6 +16,20 @@ const LibraryPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const sortByNumberDesc = (a: BaseDoc, b: BaseDoc) => {
+    const extractNum = (n: string) => {
+      const match = n.match(/(\d+)(?!.*\d)/);
+      return match ? parseInt(match[1], 10) : Number.NEGATIVE_INFINITY;
+    };
+    const numA = extractNum(a.number);
+    const numB = extractNum(b.number);
+    if (numA !== numB) return numB - numA;
+    return b.number.localeCompare(a.number);
+  };
+
+  const formatMoney = (value: number) =>
+    value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const refresh = async () => {
     setLoading(true);
     let list = await StorageService.list(tab === 'all' ? undefined : tab);
@@ -28,6 +42,7 @@ const LibraryPage: React.FC = () => {
         (doc.tags?.some(t => t.toLowerCase().includes(s)))
       );
     }
+    list = [...list].sort(sortByNumberDesc);
     setDocs(list);
     setLoading(false);
   };
@@ -98,7 +113,7 @@ const LibraryPage: React.FC = () => {
                   <td>{name}</td>
                   <td>{doc.type}</td>
                   <td>{doc.number}</td>
-                  <td>{doc.total.toFixed(2)}</td>
+                  <td>{formatMoney(doc.total)}</td>
                   <td>{doc.updatedAtISO.slice(0, 16).replace('T', ' ')}</td>
                   <td>
                     <button onClick={() => handleOpen(doc)}>Open</button>
